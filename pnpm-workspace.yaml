@@ -1,0 +1,2 @@
+packages: # 定义项目根目录下的 packages 目录为包目录，用于管理多个包
+  - "packages/*" # 表示 packages 目录下的所有子目录都作为包目录
