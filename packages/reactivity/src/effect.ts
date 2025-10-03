@@ -1,5 +1,3 @@
-import { cleanDepEffect } from './reactiveEffect';
-
 export const effect = (fn: () => void, options?: any) => {
     // 创建一个响应式 effect，数据变化后可以重新执行
     const _effect = new ReactiveEffect(fn, () => {
@@ -9,6 +7,16 @@ export const effect = (fn: () => void, options?: any) => {
 
     // 默认执行一次
     _effect.run();
+
+    // 自定义调度函数，用户传的参数覆盖默认的
+    if (options) {
+        Object.assign(_effect, options);
+    }
+    
+    // 返回一个函数，用户可以手动调用
+    const runner = _effect.run.bind(_effect); 
+    runner.effect = _effect;
+    return runner;
 }
 
 export let activeEffect; // 全局变量，初始化一次
@@ -83,7 +91,7 @@ export const tarckEffect = (effect, dep) => {
     // 这样，key -> effect 就建立了联系，即 key 对应/依赖的 effect 是谁
     // （双向记忆中的一向： key -> effect）
 
-    debugger;
+    // debugger;
     if (dep.get(effect) !== effect._trackId) {
         // 不相等，说明这个属性 key 在 这个 effect 执行的第 _trackId 次里是第一次收集这个 effect
         dep.set(effect, effect._trackId);
