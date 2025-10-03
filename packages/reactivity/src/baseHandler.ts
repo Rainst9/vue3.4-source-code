@@ -1,5 +1,7 @@
 // 提取 handler 中的公共逻辑
 import { track, trigger } from './reactiveEffect';
+import { reactive } from './reactive';
+import { isObject } from '@vue/shared';
 
 // 响应式对象的标志
 // enum 枚举，是 ts 的语法，用来定义一组常量
@@ -20,7 +22,12 @@ export const mutableHandlers: ProxyHandler<any> = {
         track(target, key); 
 
         // return target[key]; 
-        return Reflect.get(target, key, receiver);
+        
+        let res = Reflect.get(target, key, receiver);
+        if (isObject(res)) { // 如果属性值是对象，则递归代理
+            return reactive(res); 
+        }
+        return res;
     },
     set(target, key, value, receiver) {
         console.log('set', key)
