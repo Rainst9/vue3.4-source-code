@@ -43,6 +43,7 @@ class ReactiveEffect {
     _trackId = 0; // 用于记录当前的 effect 执行了几次
     deps = []; // 用于记录当前的 effect 依赖了哪些 key
     _depsLength = 0;
+    _running = 0; // 用于记录当前的 effect 是否在运行
     public active = true; // 创建的 effect 默认是激活状态
     // fn 用户编写的函数
     // scheduler 调度执行
@@ -59,11 +60,13 @@ class ReactiveEffect {
 
             // effect 执行前，做些清理工作
             preCleanEffect(this);
+            this._running++;
 
             return this.fn();
             // 激活的，进行依赖收集，即 
             // fn 中的 state.name 和 state.age 和 effect 建立联系
         } finally {
+            this._running--;
             // effect 执行后，做些清理工作
             postCleanEffect(this);
             
@@ -116,10 +119,13 @@ export const tarckEffect = (effect, dep) => {
 export const triggerEffects = (dep) => {
     // dep 是一个 map，格式为： { effect1: trackId, effect2: trackId }
    for (const effect of dep.keys()) {
-        // 如果 effect 有 scheduler，则调用 scheduler
-        // scheduler 里会调用 effect.run()，从而重新执行 fn()，即 effect
-        if (effect.scheduler) {
-            effect.scheduler();
+        // 如果 effect 正在运行，则不执行 scheduler
+        if (!effect._running) {
+            // 如果 effect 有 scheduler，则调用 scheduler
+            // scheduler 里会调用 effect.run()，从而重新执行 fn()，即 effect
+            if (effect.scheduler) {
+                effect.scheduler();
+            }
         }
    }
 }
