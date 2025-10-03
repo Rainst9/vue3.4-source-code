@@ -1,3 +1,5 @@
+import { cleanDepEffect } from './reactiveEffect';
+
 export const effect = (fn: () => void, options?: any) => {
     // 创建一个响应式 effect，数据变化后可以重新执行
     const _effect = new ReactiveEffect(fn, () => {
@@ -10,6 +12,25 @@ export const effect = (fn: () => void, options?: any) => {
 }
 
 export let activeEffect; // 全局变量，初始化一次
+
+// 每次执行前，做些清理工作
+function preCleanEffect(effect) {
+    effect._depsLength = 0; // 仅清空依赖长度的变量
+    effect._trackId++; // 每次执行id都+1，用于解决 同一个 effect 里多次收集属性 A
+}
+
+function postCleanEffect(effect) {
+    // 上一次 effect 的依赖：[ flag, age, name]
+    // 这一次 effect 的依赖：[ flag ]
+    // 那么需要清理的依赖是：[ age, name ] 
+    if (effect.deps.length > effect._depsLength) {
+        for (let i = effect._depsLength; i < effect.deps.length; i++) {
+            cleanDepEffect(effect.deps[i], effect); // 删除 targetMap 中 effect 对应的依赖
+        }
+        effect.deps.length = effect._depsLength; // 删除多余的依赖
+    }
+}
+
 class ReactiveEffect {
     _trackId = 0; // 用于记录当前的 effect 执行了几次
     deps = []; // 用于记录当前的 effect 依赖了哪些 key
@@ -21,16 +42,23 @@ class ReactiveEffect {
     run() {
         if (!this.active) {
             // 不是激活的，执行后不用做别的
-            this.fn();
+            return this.fn();
         }
 
         let lastEffect = activeEffect;
         try {
             activeEffect = this;
-            this.fn();
+
+            // effect 执行前，做些清理工作
+            preCleanEffect(this);
+
+            return this.fn();
             // 激活的，进行依赖收集，即 
             // fn 中的 state.name 和 state.age 和 effect 建立联系
         } finally {
+            // effect 执行后，做些清理工作
+            postCleanEffect(this);
+            
             // 当这次的 effect 执行完，把 activeEffect 设置为 undefined
             // 下次再执行 effect 时，会重新赋值，避免混乱 
 
@@ -40,16 +68,40 @@ class ReactiveEffect {
     }
 }
 
+// 清理依赖
+function cleanDepEffect(dep, effect) {
+    dep.delete(effect);
+    if (dep.size === 0) {
+        dep.cleanup();
+    }
+}
+
 // 依赖收集
 export const tarckEffect = (effect, dep) => {
+    // console.log('tarckEffect', effect, dep)
     // dep 是一个 map，其外层是 key：dep
     // 这样，key -> effect 就建立了联系，即 key 对应/依赖的 effect 是谁
     // （双向记忆中的一向： key -> effect）
-    dep.set(effect, effect._trackId);
 
-    // 同时 effect -> key 也要记录下
-    effect.deps[effect._depsLength++] = dep;
-    console.log(effect.deps, 'deps');
+    debugger;
+    if (dep.get(effect) !== effect._trackId) {
+        // 不相等，说明这个属性 key 在 这个 effect 执行的第 _trackId 次里是第一次收集这个 effect
+        dep.set(effect, effect._trackId);
+
+        let oldDep = effect.deps[effect._depsLength];
+        if (oldDep !== dep) {
+            if (oldDep) {
+                cleanDepEffect(oldDep, effect);
+            }
+            effect.deps[effect._depsLength++] = dep;
+        } else {
+            effect._depsLength++;
+        }
+    }
+
+    // // 同时 effect -> key 也要记录下
+    // effect.deps[effect._depsLength++] = dep;
+    // console.log(effect.deps, 'deps');
 }
 
 // 触发依赖，更新视图
